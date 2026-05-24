@@ -1,0 +1,24 @@
+# Caddy runs on the HOST — not inside Docker.
+# Copy to /etc/caddy/Caddyfile (or include in your Caddyfile).
+#
+# Containers bind to 127.0.0.1 only.
+# Caddy handles TLS via Let's Encrypt automatically.
+#
+# Firewall: only expose 22, 80, 443.
+# Never expose 4000, 4001, 3381, 6379, 5432.
+
+app.example.com {
+  reverse_proxy 127.0.0.1:4000
+}
+
+api.example.com {
+  reverse_proxy 127.0.0.1:4001
+
+  # Optional: protect internal routes in production
+  # @internal path /v1/kv* /v1/storage*
+  # respond @internal 403
+}
+
+# If serving Farcaster Mini App manifest via web:
+# https://app.example.com/.well-known/farcaster.json
+# is automatically served by the web container via Caddy → web reverse proxy above.

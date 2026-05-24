@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.turbo/
+*.env.local
+.env
+storage/uploads/*
+storage/cache/*
+storage/exports/*
+storage/proofs/*
+!storage/uploads/.gitkeep
+!storage/cache/.gitkeep
+!storage/exports/.gitkeep
+!storage/proofs/.gitkeep
