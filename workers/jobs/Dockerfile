@@ -27,4 +27,6 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 COPY --from=builder /app/workers/jobs/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
+RUN chown -R node:node /app
+USER node
 CMD ["node", "dist/index.js"]

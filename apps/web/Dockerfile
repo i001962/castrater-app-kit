@@ -22,4 +22,7 @@ RUN pnpm --filter @castrater/web build
 FROM nginx:alpine AS runner
 COPY --from=builder /app/apps/web/dist /usr/share/nginx/html
 COPY apps/web/nginx.conf /etc/nginx/conf.d/default.conf
+RUN mkdir -p /var/cache/nginx /var/run /var/log/nginx \
+  && chown -R nginx:nginx /usr/share/nginx/html /etc/nginx/conf.d /var/cache/nginx /var/run /var/log/nginx
+USER nginx
 EXPOSE 4000

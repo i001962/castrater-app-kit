@@ -31,5 +31,7 @@ FROM node:20-alpine AS runner
 WORKDIR /app
 COPY --from=builder /app/apps/api/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
+RUN chown -R node:node /app
+USER node
 EXPOSE 4001
 CMD ["node", "dist/server.js"]
