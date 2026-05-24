@@ -1,0 +1,19 @@
+# Production overrides — use with:
+# docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+version: "3.9"
+
+services:
+  api:
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=warn
+    restart: always
+
+  worker:
+    environment:
+      - NODE_ENV=production
+      - LOG_LEVEL=warn
+    restart: always
+
+  web:
+    restart: always

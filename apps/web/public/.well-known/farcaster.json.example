@@ -1,0 +1,21 @@
+{
+  "TODO": "Rename this file to farcaster.json and fill in real values. See https://miniapps.farcaster.xyz/docs/specification for current field definitions.",
+  "accountAssociation": {
+    "TODO": "Generate this via Farcaster developer tools or Warpcast. Links the app domain to a Farcaster account.",
+    "header": "YOUR_SIGNED_HEADER_HERE",
+    "payload": "YOUR_PAYLOAD_HERE",
+    "signature": "YOUR_SIGNATURE_HERE"
+  },
+  "frame": {
+    "TODO_spec": "Fields below are illustrative — always verify against current Farcaster Mini Apps spec at https://miniapps.farcaster.xyz/docs/specification",
+    "version": "vNext",
+    "name": "Your App Name",
+    "iconUrl": "https://your-domain.com/og/icon.png",
+    "homeUrl": "https://your-domain.com",
+    "imageUrl": "https://your-domain.com/og/default.png",
+    "buttonTitle": "Open App",
+    "splashImageUrl": "https://your-domain.com/og/splash.png",
+    "splashBackgroundColor": "#0a0a0a",
+    "webhookUrl": "https://api.your-domain.com/v1/miniapp/webhook"
+  }
+}
