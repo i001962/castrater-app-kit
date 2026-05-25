@@ -2,16 +2,16 @@
   "name": "@castrater/proofs",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "type-check": "tsc --noEmit"
-  },
-  "dependencies": {
-    "@castrater/storage": "workspace:*"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/**/*.test.ts"
   },
   "devDependencies": {
     "typescript": "*",
-    "@types/node": "^20.0.0"
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0"
   }
 }

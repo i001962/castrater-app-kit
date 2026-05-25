@@ -1,68 +1,101 @@
 import type { FastifyInstance } from 'fastify';
-import { MockWalletService } from '@castrater/wallet';
-import { createQkmsClient } from '@castrater/qkms';
-
-// Singleton wallet service (in production, use dependency injection or a real DB-backed service)
-let walletService: MockWalletService | null = null;
-function getWalletService() {
-  if (!walletService) {
-    const qkms = createQkmsClient();
-    walletService = new MockWalletService(qkms);
-  }
-  return walletService;
-}
+import { WalletOwnershipError } from '@castrater/wallet';
 
 export async function walletRoute(app: FastifyInstance) {
-  app.post<{ Body: { userId: string; appId: string } }>(
+  app.post<{ Body: { appSlug?: string } }>(
     '/wallet/create',
-    {
-      schema: {
-        body: {
-          type: 'object',
-          required: ['userId', 'appId'],
-          properties: {
-            userId: { type: 'string' },
-            appId: { type: 'string' },
-          },
+    async (request, reply) => {
+      if (!request.currentUser) {
+        return reply.code(401).send({ ok: false, error: 'Authentication required' });
+      }
+
+      const created = await app.walletService.createAppWallet({
+        userId: request.currentUser.id,
+        appSlug: request.body?.appSlug ?? app.env.DEFAULT_APP_SLUG,
+      });
+
+      return reply.code(201).send({
+        ok: true,
+        data: {
+          wallet: created.wallet,
+          app: created.app,
+          event: created.event,
         },
-      },
-    },
-    async (req, reply) => {
-      const service = getWalletService();
-      const wallet = await service.createAppWallet(req.body.userId, req.body.appId);
-      return reply.code(201).send({ ok: true, data: wallet });
+      });
     }
   );
 
-  app.get<{ Params: { walletId: string } }>('/wallet/:walletId', async (req, reply) => {
-    const service = getWalletService();
-    const wallet = await service.getWallet(req.params.walletId);
-    if (!wallet) return reply.code(404).send({ ok: false, error: 'Wallet not found' });
+  app.get('/wallets', async (request, reply) => {
+    if (!request.currentUser) {
+      return reply.code(401).send({ ok: false, error: 'Authentication required' });
+    }
+    const wallets = await app.walletService.listUserWallets(request.currentUser.id);
+    return { ok: true, data: wallets };
+  });
+
+  app.get<{ Params: { walletId: string } }>('/wallet/:walletId', async (request, reply) => {
+    if (!request.currentUser) {
+      return reply.code(401).send({ ok: false, error: 'Authentication required' });
+    }
+
+    const wallet = await app.walletService.getWalletForUser(
+      request.currentUser.id,
+      request.params.walletId
+    );
+    if (!wallet) {
+      return reply.code(404).send({ ok: false, error: 'Wallet not found' });
+    }
     return { ok: true, data: wallet };
   });
 
-  app.post<{ Body: { walletId: string; payload: string } }>(
-    '/wallet/sign',
-    {
-      schema: {
-        body: {
-          type: 'object',
-          required: ['walletId', 'payload'],
-          properties: {
-            walletId: { type: 'string' },
-            payload: { type: 'string' },
-          },
-        },
-      },
-    },
-    async (req, reply) => {
-      const service = getWalletService();
+  app.post<{ Params: { walletId: string }; Body: { message: string } }>(
+    '/wallet/:walletId/sign-message',
+    async (request, reply) => {
+      if (!request.currentUser) {
+        return reply.code(401).send({ ok: false, error: 'Authentication required' });
+      }
+
       try {
-        const result = await service.signWithPolicy(req.body.walletId, req.body.payload);
+        const result = await app.walletService.signMessageForUser({
+          userId: request.currentUser.id,
+          walletId: request.params.walletId,
+          message: request.body.message,
+          requestId: request.id,
+        });
         return { ok: true, data: result };
-      } catch (err) {
-        const message = err instanceof Error ? err.message : 'Sign failed';
-        return reply.code(400).send({ ok: false, error: message });
+      } catch (error) {
+        if (error instanceof WalletOwnershipError) {
+          return reply.code(404).send({ ok: false, error: error.message });
+        }
+        return reply.code(400).send({
+          ok: false,
+          error: error instanceof Error ? error.message : 'Signing failed',
+        });
+      }
+    }
+  );
+
+  app.get<{ Params: { walletId: string } }>(
+    '/wallet/:walletId/events',
+    async (request, reply) => {
+      if (!request.currentUser) {
+        return reply.code(401).send({ ok: false, error: 'Authentication required' });
+      }
+
+      try {
+        const events = await app.walletService.listWalletEvents(
+          request.currentUser.id,
+          request.params.walletId
+        );
+        return { ok: true, data: events };
+      } catch (error) {
+        if (error instanceof WalletOwnershipError) {
+          return reply.code(404).send({ ok: false, error: error.message });
+        }
+        return reply.code(400).send({
+          ok: false,
+          error: error instanceof Error ? error.message : 'Failed to load wallet events',
+        });
       }
     }
   );

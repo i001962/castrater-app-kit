@@ -13,7 +13,11 @@
     "lint": {
       "outputs": []
     },
-    "type-check": {
+    "typecheck": {
+      "outputs": []
+    },
+    "test": {
+      "dependsOn": ["^test"],
       "outputs": []
     },
     "clean": {

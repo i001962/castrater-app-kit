@@ -1,167 +1,174 @@
-/// <reference types="node" />
-/**
- * qKMS adapter for Quilibrium Key Management Service.
- *
- * This is an adapter ONLY — it does not replace qKMS.
- * Production: configure QKMS_URL and QKMS_API_KEY to point to real qKMS.
- *
- * Security rules:
- * - Browser NEVER talks directly to qKMS
- * - Only API/worker processes call qKMS
- * - No raw private keys are ever stored or returned
- */
+import crypto from 'node:crypto';
 
 export interface CreateKeyInput {
   label?: string;
   curve?: 'secp256k1' | 'ed25519';
 }
 
-export interface CreateKeyResult {
-  keyId: string;
-  address: string;
-  curve: string;
-}
-
-export interface SignResult {
-  signature: string;
-  keyId: string;
-}
-
 export interface QkmsClient {
-  createKey(input: CreateKeyInput): Promise<CreateKeyResult>;
-  getAddress(keyId: string): Promise<string>;
-  signMessage(keyId: string, payload: string): Promise<SignResult>;
-  signTransaction(keyId: string, tx: unknown): Promise<SignResult>;
-  rotateKey(keyId: string): Promise<{ newKeyId: string }>;
-  disableKey(keyId: string): Promise<void>;
+  createKey(input: CreateKeyInput): Promise<{ keyId: string; address: string }>;
+  getAddress(keyId: string): Promise<{ address: string }>;
+  signMessage(keyId: string, payload: string | Uint8Array): Promise<{ signature: string }>;
+  signTransaction(keyId: string, tx: unknown): Promise<{ signature: string }>;
+  disableKey(keyId: string): Promise<{ disabled: true }>;
+}
+
+export interface QkmsStatus {
+  mode: 'mock' | 'remote';
+  configured: boolean;
+  baseUrl?: string;
+}
+
+function digestHex(value: string | Uint8Array): string {
+  return crypto.createHash('sha256').update(value).digest('hex');
 }
 
 /**
- * MOCK qKMS client — FOR LOCAL DEVELOPMENT ONLY.
- *
- * ⚠️  WARNING: This mock is UNSAFE for production.
- * It does NOT provide real cryptographic security.
- * Replace with real qKMS adapter before deploying to production.
+ * Development-only mock client.
+ * This exists to preserve the signing boundary shape during local work.
+ * It does not provide custody or real cryptographic guarantees.
  */
 export class MockQkmsClient implements QkmsClient {
-  private keys = new Map<string, { address: string; curve: string }>();
+  private readonly keys = new Map<string, { address: string }>();
 
-  async createKey(input: CreateKeyInput): Promise<CreateKeyResult> {
-    const keyId = `mock-key-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const address = `0xMOCK${keyId.slice(-8).toUpperCase()}`;
-    const curve = input.curve ?? 'secp256k1';
-    this.keys.set(keyId, { address, curve });
-    console.warn('[qkms:mock] createKey — UNSAFE, dev only');
-    return { keyId, address, curve };
+  async createKey(input: CreateKeyInput): Promise<{ keyId: string; address: string }> {
+    const label = input.label ?? 'wallet';
+    const seed = `${label}:${input.curve ?? 'secp256k1'}:${Date.now()}:${Math.random()}`;
+    const keyId = `mock_qkms_${digestHex(seed).slice(0, 24)}`;
+    const address = `0x${digestHex(`${keyId}:address`).slice(0, 40)}`;
+
+    this.keys.set(keyId, { address });
+    console.warn('[qkms:mock] createKey() is unsafe and for development only');
+
+    return { keyId, address };
   }
 
-  async getAddress(keyId: string): Promise<string> {
-    const key = this.keys.get(keyId);
-    if (!key) throw new Error(`MockQkmsClient: key not found: ${keyId}`);
-    return key.address;
+  async getAddress(keyId: string): Promise<{ address: string }> {
+    const record = this.keys.get(keyId);
+    if (!record) {
+      throw new Error(`MockQkmsClient: unknown key ${keyId}`);
+    }
+    return { address: record.address };
   }
 
-  async signMessage(keyId: string, payload: string): Promise<SignResult> {
-    if (!this.keys.has(keyId)) throw new Error(`MockQkmsClient: key not found: ${keyId}`);
-    const signature = `0xMOCKSIG_${Buffer.from(payload).toString('hex').slice(0, 16)}`;
-    console.warn('[qkms:mock] signMessage — UNSAFE, dev only');
-    return { signature, keyId };
+  async signMessage(
+    keyId: string,
+    payload: string | Uint8Array
+  ): Promise<{ signature: string }> {
+    if (!this.keys.has(keyId)) {
+      throw new Error(`MockQkmsClient: unknown key ${keyId}`);
+    }
+    const signature = `0xmocksig${digestHex(
+      typeof payload === 'string' ? payload : payload
+    ).slice(0, 56)}`;
+    console.warn('[qkms:mock] signMessage() is unsafe and for development only');
+    return { signature };
   }
 
-  async signTransaction(keyId: string, _tx: unknown): Promise<SignResult> {
-    if (!this.keys.has(keyId)) throw new Error(`MockQkmsClient: key not found: ${keyId}`);
-    const signature = `0xMOCKTXSIG_${Date.now()}`;
-    console.warn('[qkms:mock] signTransaction — UNSAFE, dev only');
-    return { signature, keyId };
+  async signTransaction(keyId: string, tx: unknown): Promise<{ signature: string }> {
+    return this.signMessage(keyId, JSON.stringify(tx));
   }
 
-  async rotateKey(keyId: string): Promise<{ newKeyId: string }> {
-    const existing = this.keys.get(keyId);
-    if (!existing) throw new Error(`MockQkmsClient: key not found: ${keyId}`);
-    const newKeyId = `mock-key-rotated-${Date.now()}`;
-    this.keys.set(newKeyId, existing);
+  async disableKey(keyId: string): Promise<{ disabled: true }> {
     this.keys.delete(keyId);
-    console.warn('[qkms:mock] rotateKey — UNSAFE, dev only');
-    return { newKeyId };
-  }
-
-  async disableKey(keyId: string): Promise<void> {
-    this.keys.delete(keyId);
-    console.warn('[qkms:mock] disableKey — UNSAFE, dev only');
+    console.warn('[qkms:mock] disableKey() is unsafe and for development only');
+    return { disabled: true };
   }
 }
 
-/**
- * Remote qKMS HTTP client stub.
- * TODO: Implement against real qKMS REST API when available.
- */
 export class RemoteQkmsClient implements QkmsClient {
   constructor(
     private readonly baseUrl: string,
     private readonly apiKey: string
   ) {}
 
-  private async request<T>(path: string, opts?: RequestInit): Promise<T> {
-    const res = await fetch(`${this.baseUrl}${path}`, {
-      ...opts,
+  private async request<T>(path: string, init?: RequestInit): Promise<T> {
+    const response = await fetch(`${this.baseUrl}${path}`, {
+      ...init,
       headers: {
         'Content-Type': 'application/json',
         'X-Api-Key': this.apiKey,
-        ...opts?.headers,
+        ...init?.headers,
       },
     });
-    if (!res.ok) throw new Error(`qKMS request failed: ${res.status} ${path}`);
-    return res.json() as Promise<T>;
+
+    if (!response.ok) {
+      throw new Error(`qKMS request failed: ${response.status} ${path}`);
+    }
+
+    return (await response.json()) as T;
   }
 
-  async createKey(input: CreateKeyInput): Promise<CreateKeyResult> {
+  createKey(input: CreateKeyInput): Promise<{ keyId: string; address: string }> {
     return this.request('/v1/keys', {
       method: 'POST',
       body: JSON.stringify(input),
     });
   }
 
-  async getAddress(keyId: string): Promise<string> {
-    const result = await this.request<{ address: string }>(`/v1/keys/${keyId}/address`);
-    return result.address;
+  getAddress(keyId: string): Promise<{ address: string }> {
+    return this.request(`/v1/keys/${keyId}/address`);
   }
 
-  async signMessage(keyId: string, payload: string): Promise<SignResult> {
+  signMessage(keyId: string, payload: string | Uint8Array): Promise<{ signature: string }> {
     return this.request(`/v1/keys/${keyId}/sign`, {
       method: 'POST',
-      body: JSON.stringify({ payload }),
+      body: JSON.stringify({
+        payload:
+          typeof payload === 'string'
+            ? payload
+            : Buffer.from(payload).toString('base64'),
+      }),
     });
   }
 
-  async signTransaction(keyId: string, tx: unknown): Promise<SignResult> {
-    return this.request(`/v1/keys/${keyId}/sign-tx`, {
+  signTransaction(keyId: string, tx: unknown): Promise<{ signature: string }> {
+    return this.request(`/v1/keys/${keyId}/sign-transaction`, {
       method: 'POST',
       body: JSON.stringify({ tx }),
     });
   }
 
-  async rotateKey(keyId: string): Promise<{ newKeyId: string }> {
-    return this.request(`/v1/keys/${keyId}/rotate`, { method: 'POST' });
-  }
-
-  async disableKey(keyId: string): Promise<void> {
-    await this.request(`/v1/keys/${keyId}`, { method: 'DELETE' });
+  disableKey(keyId: string): Promise<{ disabled: true }> {
+    return this.request(`/v1/keys/${keyId}`, { method: 'DELETE' });
   }
 }
 
 export function createQkmsClient(opts?: {
-  mode?: 'mock' | 'remote';
   baseUrl?: string;
   apiKey?: string;
+  mode?: 'mock' | 'remote';
 }): QkmsClient {
   const mode = opts?.mode ?? (process.env['QKMS_URL'] ? 'remote' : 'mock');
   if (mode === 'remote') {
     const baseUrl = opts?.baseUrl ?? process.env['QKMS_URL'];
     const apiKey = opts?.apiKey ?? process.env['QKMS_API_KEY'];
     if (!baseUrl || !apiKey) {
-      throw new Error('RemoteQkmsClient requires QKMS_URL and QKMS_API_KEY');
+      throw new Error('QKMS_URL and QKMS_API_KEY are required for remote qKMS mode');
     }
     return new RemoteQkmsClient(baseUrl, apiKey);
   }
   return new MockQkmsClient();
+}
+
+export function getQkmsStatus(opts?: {
+  baseUrl?: string;
+  apiKey?: string;
+  mode?: 'mock' | 'remote';
+}): QkmsStatus {
+  const mode = opts?.mode ?? (process.env['QKMS_URL'] ? 'remote' : 'mock');
+  if (mode === 'remote') {
+    const baseUrl = opts?.baseUrl ?? process.env['QKMS_URL'] ?? undefined;
+    const apiKey = opts?.apiKey ?? process.env['QKMS_API_KEY'] ?? undefined;
+    return {
+      mode,
+      configured: Boolean(baseUrl && apiKey),
+      baseUrl,
+    };
+  }
+
+  return {
+    mode: 'mock',
+    configured: true,
+  };
 }

@@ -17,4 +17,7 @@ docker compose -f infra/docker-compose.yml exec -T postgres \
 echo "→ Backing up storage..."
 tar -czf "$BACKUP_DIR/storage_$TIMESTAMP.tar.gz" storage/
 
+echo "→ Capturing local proof placeholders..."
+find storage/proofs -type f | sort > "$BACKUP_DIR/proofs_$TIMESTAMP.txt" || true
+
 echo "✅ Backup complete: $BACKUP_DIR"

@@ -1,6 +1,10 @@
-import type Redis from 'ioredis';
-
-export type KvClient = Redis;
+export interface KvClient {
+  get(key: string): Promise<string | null>;
+  set(key: string, value: string, mode?: 'EX', ttlSeconds?: number): Promise<unknown>;
+  del(key: string): Promise<unknown>;
+  incr(key: string): Promise<number>;
+  expire(key: string, ttlSeconds: number): Promise<unknown>;
+}
 
 export async function kvGet(redis: KvClient, key: string): Promise<string | null> {
   return redis.get(key);

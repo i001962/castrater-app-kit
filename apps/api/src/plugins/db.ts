@@ -7,11 +7,7 @@ declare module 'fastify' {
   }
 }
 
-export const dbPlugin = fp(async (app) => {
-  if (!app.env.DATABASE_URL) {
-    app.log.warn('DATABASE_URL not set — Postgres/Drizzle features disabled');
-    return;
-  }
-  const db = getDb(app.env.DATABASE_URL);
+export const dbPlugin = fp<{ db?: Db }>(async (app, opts) => {
+  const db = opts.db ?? getDb(app.env.DATABASE_URL);
   app.decorate('db', db);
 });

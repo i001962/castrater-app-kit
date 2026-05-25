@@ -31,54 +31,35 @@ services:
       - PORT=4001
       - HOST=0.0.0.0
       - REDIS_URL=redis://redis:6379
-      - DATABASE_URL=${DATABASE_URL:-}
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:changeme@postgres:5432/castrater}
       - QKMS_URL=${QKMS_URL:-}
       - QKMS_API_KEY=${QKMS_API_KEY:-}
-      - HYPERSNAP_URL=${HYPERSNAP_URL:-https://hypersnap.castrater.xyz}
-      - INFERENCE_MODE=${INFERENCE_MODE:-mock}
       - STORAGE_BASE_DIR=/app/storage
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:4000}
+      - WEBAUTHN_RP_ID=${WEBAUTHN_RP_ID:-localhost}
+      - WEBAUTHN_RP_NAME=${WEBAUTHN_RP_NAME:-castrater-app-kit}
+      - WEBAUTHN_ORIGIN=${WEBAUTHN_ORIGIN:-http://localhost:4000}
+      - SESSION_COOKIE_NAME=${SESSION_COOKIE_NAME:-castrater_session}
+      - SESSION_TTL_HOURS=${SESSION_TTL_HOURS:-168}
+      - AUTH_INSECURE_COOKIE=${AUTH_INSECURE_COOKIE:-false}
+      - AUTH_CHALLENGE_TTL_SECONDS=${AUTH_CHALLENGE_TTL_SECONDS:-300}
     volumes:
       - ../storage:/app/storage
     depends_on:
       - redis
+      - postgres
     deploy:
       resources:
         limits:
           cpus: "2"
           memory: 2g
 
-  worker:
-    build:
-      context: ..
-      dockerfile: workers/jobs/Dockerfile
-    restart: unless-stopped
-    environment:
-      - NODE_ENV=production
-      - REDIS_URL=redis://redis:6379
-      - DATABASE_URL=${DATABASE_URL:-}
-      - QKMS_URL=${QKMS_URL:-}
-      - QKMS_API_KEY=${QKMS_API_KEY:-}
-      - INFERENCE_MODE=${INFERENCE_MODE:-mock}
-      - INFERENCE_BASE_URL=${INFERENCE_BASE_URL:-http://localhost:11434}
-      - INFERENCE_MODEL=${INFERENCE_MODEL:-llama3.2}
-      - STORAGE_BASE_DIR=/app/storage
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-    volumes:
-      - ../storage:/app/storage
-    depends_on:
-      - redis
-    deploy:
-      resources:
-        limits:
-          cpus: "4"
-          memory: 8g
-
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    # Redis is NOT exposed to the public internet
-    # Use 127.0.0.1 binding if you ever need local access for debugging
+    ports:
+      - "127.0.0.1:6379:6379"
     volumes:
       - redis-data:/data
     command: redis-server --appendonly yes --maxmemory 1gb --maxmemory-policy allkeys-lru
@@ -90,7 +71,8 @@ services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
-    # Postgres is NOT exposed to the public internet
+    ports:
+      - "127.0.0.1:5432:5432"
     environment:
       - POSTGRES_USER=${POSTGRES_USER:-postgres}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-changeme}
@@ -102,23 +84,6 @@ services:
         limits:
           memory: 4g
 
-  # Optional: Ollama inference server
-  # Run with: docker compose --profile inference up
-  ollama:
-    image: ollama/ollama
-    profiles: ["inference"]
-    ports:
-      - "127.0.0.1:11434:11434"
-    volumes:
-      - ollama-data:/root/.ollama
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          cpus: "4"
-          memory: 12g
-
 volumes:
   redis-data:
   postgres-data:
-  ollama-data:

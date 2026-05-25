@@ -1,55 +1,47 @@
-import { NavLink } from 'react-router-dom';
 import type { ReactNode } from 'react';
+import { NavLink } from 'react-router-dom';
 
-const NAV_LINKS = [
-  { to: '/', label: '~/' },
+const NAV_ITEMS = [
+  { to: '/', label: 'auth' },
+  { to: '/wallets', label: 'wallets' },
   { to: '/status', label: 'status' },
-  { to: '/wallet', label: 'wallet' },
-  { to: '/farcaster', label: 'farcaster' },
-  { to: '/miniapp', label: 'miniapp' },
-  { to: '/jobs', label: 'jobs' },
-  { to: '/proofs', label: 'proofs' },
-  { to: '/inference', label: 'inference' },
 ];
 
-interface LayoutProps {
-  children: ReactNode;
-}
-
-export default function Layout({ children }: LayoutProps) {
+export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-screen bg-terminal-bg text-terminal-green font-mono">
-      {/* Top bar */}
-      <header className="border-b border-terminal-border px-4 py-2 flex items-center gap-6">
-        <span className="text-terminal-green font-bold text-sm">castrater-app-kit</span>
-        <span className="text-terminal-dim text-xs">v0.1.0</span>
-        <nav className="flex gap-4 ml-4 flex-wrap">
-          {NAV_LINKS.map(({ to, label }) => (
-            <NavLink
-              key={to}
-              to={to}
-              end={to === '/'}
-              className={({ isActive }) =>
-                `text-xs no-underline px-1 py-0.5 border rounded transition-colors ${
-                  isActive
-                    ? 'border-terminal-green text-terminal-green bg-terminal-card'
-                    : 'border-transparent text-terminal-dim hover:text-terminal-green hover:border-terminal-border'
-                }`
-              }
-            >
-              {label}
-            </NavLink>
-          ))}
-        </nav>
+    <div className="min-h-screen bg-terminal-bg text-terminal-green">
+      <header className="border-b border-terminal-border bg-terminal-panel/80 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
+          <div>
+            <p className="text-sm uppercase tracking-[0.24em] text-terminal-dim">
+              castrater-app-kit
+            </p>
+            <h1 className="font-display text-2xl text-terminal-green">
+              Auth + qKMS App Wallet Scaffold
+            </h1>
+          </div>
+          <nav className="flex gap-2">
+            {NAV_ITEMS.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  [
+                    'rounded-full border px-4 py-2 text-xs uppercase tracking-[0.24em] no-underline transition-colors',
+                    isActive
+                      ? 'border-terminal-green bg-terminal-green text-black'
+                      : 'border-terminal-border text-terminal-dim hover:border-terminal-green hover:text-terminal-green',
+                  ].join(' ')
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+        </div>
       </header>
-      {/* Main content */}
-      <main className="px-4 py-6 max-w-4xl mx-auto">
-        {children}
-      </main>
-      {/* Footer */}
-      <footer className="border-t border-terminal-border px-4 py-2 text-xs text-terminal-dim text-center">
-        castrater-app-kit — self-hosted sovereign app kit — Q ecosystem ready
-      </footer>
+      <main className="mx-auto max-w-5xl px-5 py-8">{children}</main>
     </div>
   );
 }

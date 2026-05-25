@@ -2,16 +2,22 @@
   "name": "@castrater/wallet",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "scripts": {
-    "type-check": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx --test src/**/*.test.ts"
   },
   "dependencies": {
+    "@castrater/db": "workspace:*",
+    "@castrater/proofs": "workspace:*",
     "@castrater/qkms": "workspace:*",
-    "zod": "^3.23.0"
+    "drizzle-orm": "^0.45.2"
   },
   "devDependencies": {
-    "typescript": "*"
+    "typescript": "*",
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0"
   }
 }

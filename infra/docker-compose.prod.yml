@@ -9,11 +9,5 @@ services:
       - LOG_LEVEL=warn
     restart: always
 
-  worker:
-    environment:
-      - NODE_ENV=production
-      - LOG_LEVEL=warn
-    restart: always
-
   web:
     restart: always

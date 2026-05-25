@@ -7,18 +7,10 @@ FROM base AS deps
 COPY pnpm-workspace.yaml ./
 COPY package.json ./
 COPY apps/api/package.json ./apps/api/
-COPY packages/config/package.json ./packages/config/
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/kv/package.json ./packages/kv/
-COPY packages/queue/package.json ./packages/queue/
-COPY packages/storage/package.json ./packages/storage/
-COPY packages/hypersnap/package.json ./packages/hypersnap/
-COPY packages/farcaster/package.json ./packages/farcaster/
-COPY packages/miniapp/package.json ./packages/miniapp/
+COPY packages/db/package.json ./packages/db/
+COPY packages/proofs/package.json ./packages/proofs/
 COPY packages/qkms/package.json ./packages/qkms/
 COPY packages/wallet/package.json ./packages/wallet/
-COPY packages/proofs/package.json ./packages/proofs/
-COPY packages/inference/package.json ./packages/inference/
 RUN pnpm install --frozen-lockfile --ignore-scripts
 
 FROM deps AS builder

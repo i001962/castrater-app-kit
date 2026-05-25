@@ -1,39 +1,146 @@
 const API_URL = import.meta.env['VITE_API_URL'] ?? 'http://localhost:4001';
 
-export async function apiFetch<T>(
-  path: string,
-  opts?: RequestInit
-): Promise<{ ok: boolean; data?: T; error?: string }> {
-  try {
-    const res = await fetch(`${API_URL}${path}`, {
-      headers: { 'Content-Type': 'application/json', ...opts?.headers },
-      ...opts,
-    });
-    const json = await res.json();
-    return json as { ok: boolean; data?: T; error?: string };
-  } catch (err) {
-    return { ok: false, error: err instanceof Error ? err.message : 'Network error' };
-  }
+export interface ApiResponse<T> {
+  ok: boolean;
+  data?: T;
+  error?: string;
+}
+
+export interface SessionUser {
+  id: string;
+  displayName: string | null;
+  email: string | null;
+  fid?: number | null;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+export interface WalletRecord {
+  walletId: string;
+  address: string;
+  chain: string;
+  status: string;
+  appSlug: string;
+  appName: string;
+  createdAt: string;
+}
+
+export interface WalletEventRecord {
+  id: string;
+  walletId: string;
+  eventType: string;
+  requestId: string | null;
+  payloadHash: string | null;
+  signature: string | null;
+  metadata: Record<string, unknown>;
+  createdAt: string;
+}
+
+export interface SignMessageResult {
+  wallet: {
+    walletId: string;
+    address: string;
+    chain: string;
+    status: string;
+    qkmsKeyId: string;
+    createdAt: string;
+    appAccountId: string;
+    appSlug: string;
+    appName: string;
+    policyId: string | null;
+  };
+  signature: string;
+  eventId: string;
+  payloadHash: string;
+}
+
+async function request<T>(path: string, init?: RequestInit): Promise<ApiResponse<T>> {
+  const response = await fetch(`${API_URL}${path}`, {
+    credentials: 'include',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(init?.headers ?? {}),
+    },
+    ...init,
+  });
+
+  return (await response.json()) as ApiResponse<T>;
 }
 
 export const api = {
-  health: () => apiFetch<{ status: string; redis: string }>('/health'),
-  info: () => apiFetch<{ name: string; version: string; env: string; features: Record<string, unknown> }>('/v1/info'),
-  kvGet: (key: string) => apiFetch<{ key: string; value: string }>(`/v1/kv/${key}`),
-  kvSet: (key: string, value: string, ttl?: number) =>
-    apiFetch('/v1/kv', { method: 'POST', body: JSON.stringify({ key, value, ttl }) }),
-  kvDel: (key: string) => apiFetch(`/v1/kv/${key}`, { method: 'DELETE' }),
-  enqueueJob: (name: string, data?: Record<string, unknown>) =>
-    apiFetch<{ jobId: string }>('/v1/jobs', { method: 'POST', body: JSON.stringify({ name, data }) }),
-  getJob: (id: string) => apiFetch<{ id: string; name: string; state: string }>(`/v1/jobs/${id}`),
-  getFarcasterUser: (fid: number) => apiFetch(`/v1/farcaster/fid/${fid}`),
-  createWallet: (userId: string, appId: string) =>
-    apiFetch('/v1/wallet/create', { method: 'POST', body: JSON.stringify({ userId, appId }) }),
-  createProof: (data: unknown) =>
-    apiFetch('/v1/proofs/create', { method: 'POST', body: JSON.stringify({ data }) }),
-  enqueueInference: (prompt: string, model?: string) =>
-    apiFetch<{ jobId: string }>('/v1/inference/jobs', {
+  health: () => request<{ status: string; db: string; redis: string }>('/health'),
+  status: () =>
+    request<{
+      authEnabled: boolean;
+      db: string;
+      redis: string;
+      qkms: {
+        mode: 'mock' | 'remote';
+        configured: boolean;
+        baseUrl?: string;
+      };
+      webauthn: { rpId: string; origin: string };
+    }>('/v1/status'),
+  registerOptions: (payload: { displayName?: string; email?: string }) =>
+    request('/v1/auth/register/options', {
       method: 'POST',
-      body: JSON.stringify({ prompt, model }),
+      body: JSON.stringify(payload),
     }),
+  verifyRegistration: (payload: unknown) =>
+    request<SessionUser>(
+      '/v1/auth/register/verify',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
+  loginOptions: (payload: { email?: string; userId?: string }) =>
+    request('/v1/auth/login/options', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  verifyLogin: (payload: unknown) =>
+    request<SessionUser>(
+      '/v1/auth/login/verify',
+      {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      }
+    ),
+  me: () => request<SessionUser>('/v1/auth/me'),
+  logout: () => request('/v1/auth/logout', { method: 'POST' }),
+  ensureDefaultApp: () => request('/v1/apps/default', { method: 'POST' }),
+  createWallet: (payload?: { appSlug?: string }) =>
+    request<{
+      wallet: {
+        id: string;
+        appAccountId: string;
+        qkmsKeyId: string;
+        address: string;
+        chain: string;
+        status: string;
+        policyId: string | null;
+        createdAt: string;
+      };
+      app: {
+        id: string;
+        slug: string;
+        name: string;
+        createdAt: string;
+      };
+      event: WalletEventRecord;
+    }>('/v1/wallet/create', {
+      method: 'POST',
+      body: JSON.stringify(payload ?? {}),
+    }),
+  listWallets: () => request<WalletRecord[]>('/v1/wallets'),
+  getWalletEvents: (walletId: string) => request<WalletEventRecord[]>(`/v1/wallet/${walletId}/events`),
+  signMessage: (walletId: string, message: string) =>
+    request<SignMessageResult>(
+      `/v1/wallet/${walletId}/sign-message`,
+      {
+        method: 'POST',
+        body: JSON.stringify({ message }),
+      }
+    ),
 };

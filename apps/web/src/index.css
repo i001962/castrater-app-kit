@@ -1,11 +1,19 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
 @layer base {
-  html, body {
+  :root {
+    color-scheme: dark;
+  }
+
+  body {
     @apply bg-terminal-bg text-terminal-green font-mono;
+    background-image:
+      radial-gradient(circle at top left, rgba(88, 218, 152, 0.18), transparent 28%),
+      radial-gradient(circle at right, rgba(255, 214, 126, 0.08), transparent 24%);
     min-height: 100vh;
   }
 
@@ -14,32 +22,20 @@
   }
 
   a {
-    @apply text-terminal-green hover:text-white underline;
+    @apply text-terminal-green underline-offset-4;
   }
-
-  h1 { @apply text-2xl font-bold text-terminal-green; }
-  h2 { @apply text-xl font-bold text-terminal-green; }
-  h3 { @apply text-lg font-semibold text-terminal-dim; }
 }
 
 @layer components {
-  .terminal-card {
-    @apply bg-terminal-card border border-terminal-border rounded p-4;
+  .input {
+    @apply rounded-2xl border border-terminal-border bg-black/30 px-4 py-3 text-terminal-green outline-none transition-colors placeholder:text-terminal-dim focus:border-terminal-green;
   }
 
-  .terminal-badge {
-    @apply inline-block px-2 py-0.5 text-xs border rounded;
+  .button-primary {
+    @apply rounded-full border border-terminal-green bg-terminal-green px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-black transition-transform hover:-translate-y-0.5;
   }
 
-  .terminal-badge-green {
-    @apply terminal-badge border-terminal-green text-terminal-green;
-  }
-
-  .terminal-badge-amber {
-    @apply terminal-badge border-terminal-amber text-terminal-amber;
-  }
-
-  .terminal-badge-red {
-    @apply terminal-badge border-terminal-red text-terminal-red;
+  .button-secondary {
+    @apply rounded-full border border-terminal-border bg-black/20 px-5 py-3 text-xs font-semibold uppercase tracking-[0.24em] text-terminal-green transition-colors hover:border-terminal-green;
   }
 }

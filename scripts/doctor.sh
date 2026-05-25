@@ -33,6 +33,7 @@ check "storage/proofs"     "[ -d storage/proofs ]"
 echo ""
 echo "── Services ────────────────────────────"
 check "Redis reachable"    "docker compose -f infra/docker-compose.yml exec -T redis redis-cli ping 2>/dev/null | grep -q PONG"
+check "Postgres reachable" "docker compose -f infra/docker-compose.yml exec -T postgres pg_isready -U ${POSTGRES_USER:-postgres}"
 check "API healthy"        "curl -sf http://127.0.0.1:4001/health"
 check "Web reachable"      "curl -sf http://127.0.0.1:4000"
 

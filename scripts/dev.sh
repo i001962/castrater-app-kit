@@ -20,6 +20,10 @@ if [ ! -d node_modules ]; then
   pnpm install
 fi
 
+# Run database migrations
+echo "→ Running database migrations..."
+pnpm db:migrate
+
 # Start all apps with Turbo
-echo "→ Starting dev servers (web + api + worker)..."
+echo "→ Starting dev servers (web + api)..."
 pnpm dev
