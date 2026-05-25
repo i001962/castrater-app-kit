@@ -6,11 +6,16 @@ export async function healthRoute(app: FastifyInstance) {
       .ping()
       .then(() => true)
       .catch(() => false);
+    const dbOk = Boolean(app.db);
 
-    return reply.code(redisOk ? 200 : 503).send({
-      ok: redisOk,
-      status: redisOk ? 'ok' : 'degraded',
+    const ok = redisOk && dbOk;
+    return reply.code(ok ? 200 : 503).send({
+      ok,
+      status: ok ? 'ok' : 'degraded',
       redis: redisOk ? 'ok' : 'unreachable',
+      db: dbOk ? 'ok' : 'unconfigured',
+      qkmsMode: app.env.QKMS_URL ? 'remote' : 'mock-dev-only',
+      auth: 'webauthn-passkey',
       timestamp: new Date().toISOString(),
     });
   });

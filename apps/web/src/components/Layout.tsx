@@ -3,13 +3,9 @@ import type { ReactNode } from 'react';
 
 const NAV_LINKS = [
   { to: '/', label: '~/' },
-  { to: '/status', label: 'status' },
+  { to: '/auth', label: 'auth' },
   { to: '/wallet', label: 'wallet' },
-  { to: '/farcaster', label: 'farcaster' },
-  { to: '/miniapp', label: 'miniapp' },
-  { to: '/jobs', label: 'jobs' },
-  { to: '/proofs', label: 'proofs' },
-  { to: '/inference', label: 'inference' },
+  { to: '/status', label: 'status' },
 ];
 
 interface LayoutProps {
@@ -48,7 +44,7 @@ export default function Layout({ children }: LayoutProps) {
       </main>
       {/* Footer */}
       <footer className="border-t border-terminal-border px-4 py-2 text-xs text-terminal-dim text-center">
-        castrater-app-kit — self-hosted sovereign app kit — Q ecosystem ready
+        castrater-app-kit — MVP auth + app wallet scaffold (not production-ready)
       </footer>
     </div>
   );

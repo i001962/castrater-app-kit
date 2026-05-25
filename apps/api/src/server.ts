@@ -4,18 +4,14 @@ import cors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import rateLimit from '@fastify/rate-limit';
 import { envPlugin } from './plugins/env.js';
+import { dbPlugin } from './plugins/db.js';
 import { redisPlugin } from './plugins/redis.js';
-import { queuesPlugin } from './plugins/queues.js';
+import { authPlugin } from './plugins/auth.js';
 import { healthRoute } from './routes/health.js';
 import { infoRoute } from './routes/info.js';
-import { kvRoute } from './routes/kv.js';
-import { jobsRoute } from './routes/jobs.js';
 import { farcasterRoute } from './routes/farcaster.js';
-import { miniappRoute } from './routes/miniapp.js';
+import { authRoute } from './routes/auth.js';
 import { walletRoute } from './routes/wallet.js';
-import { proofsRoute } from './routes/proofs.js';
-import { storageRoute } from './routes/storage.js';
-import { inferenceRoute } from './routes/inference.js';
 
 const app = Fastify({
   logger: {
@@ -28,28 +24,22 @@ const app = Fastify({
 });
 
 async function start() {
-  // Plugins
   await app.register(envPlugin);
-  await app.register(cors, { origin: process.env['CORS_ORIGIN'] ?? '*' });
+  await app.register(cors, { origin: process.env['CORS_ORIGIN'] ?? true, credentials: true });
   await app.register(helmet);
   await app.register(rateLimit, {
     max: 100,
     timeWindow: '1 minute',
   });
+  await app.register(dbPlugin);
   await app.register(redisPlugin);
-  await app.register(queuesPlugin);
+  await app.register(authPlugin);
 
-  // Routes
   await app.register(healthRoute);
   await app.register(infoRoute, { prefix: '/v1' });
-  await app.register(kvRoute, { prefix: '/v1' });
-  await app.register(jobsRoute, { prefix: '/v1' });
-  await app.register(farcasterRoute, { prefix: '/v1' });
-  await app.register(miniappRoute, { prefix: '/v1' });
+  await app.register(authRoute, { prefix: '/v1' });
   await app.register(walletRoute, { prefix: '/v1' });
-  await app.register(proofsRoute, { prefix: '/v1' });
-  await app.register(storageRoute, { prefix: '/v1' });
-  await app.register(inferenceRoute, { prefix: '/v1' });
+  await app.register(farcasterRoute, { prefix: '/v1' });
 
   const port = Number(process.env['PORT'] ?? 4001);
   const host = process.env['HOST'] ?? '127.0.0.1';
@@ -58,7 +48,8 @@ async function start() {
   app.log.info(`API running at http://${host}:${port}`);
 }
 
-start().catch((err) => {
-  console.error(err);
+start().catch((error) => {
+  console.error(error);
   process.exit(1);
 });
+
