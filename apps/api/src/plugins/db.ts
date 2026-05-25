@@ -14,6 +14,7 @@ export const dbPlugin = fp(async (app) => {
     return;
   }
   const db = getDb(app.env.DATABASE_URL);
+  app.log.warn('Applying DB bootstrap DDL at startup; use Drizzle migrations for production deployments');
   await db.execute(sql`create extension if not exists pgcrypto;`);
   await db.execute(sql`
     create table if not exists users (

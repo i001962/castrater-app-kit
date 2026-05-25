@@ -99,11 +99,12 @@ export class RemoteQkmsClient implements QkmsClient {
   }
 
   signMessage(keyId: string, payload: string | Uint8Array): Promise<{ signature: string }> {
-    const payloadValue =
-      typeof payload === 'string' ? payload : Buffer.from(payload).toString('base64url');
+    const payloadValue = Buffer.from(
+      typeof payload === 'string' ? payload : payload
+    ).toString('base64url');
     return this.request(`/v1/keys/${keyId}/sign-message`, {
       method: 'POST',
-      body: JSON.stringify({ payload: payloadValue }),
+      body: JSON.stringify({ payload: payloadValue, encoding: 'base64url' }),
     });
   }
 

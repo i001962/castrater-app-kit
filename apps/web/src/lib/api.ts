@@ -1,4 +1,10 @@
 const API_URL = import.meta.env['VITE_API_URL'] ?? 'http://localhost:4001';
+type RegistrationOptionsJSON = Parameters<
+  typeof import('@simplewebauthn/browser')['startRegistration']
+>[0]['optionsJSON'];
+type AuthenticationOptionsJSON = Parameters<
+  typeof import('@simplewebauthn/browser')['startAuthentication']
+>[0]['optionsJSON'];
 
 export interface ApiResponse<T> {
   ok: boolean;
@@ -9,6 +15,7 @@ export interface ApiResponse<T> {
 export async function apiFetch<T>(path: string, opts?: RequestInit): Promise<ApiResponse<T>> {
   try {
     const response = await fetch(`${API_URL}${path}`, {
+      // Required for httpOnly auth session cookie round-trips (register/login/me/wallet flows)
       credentials: 'include',
       headers: { 'Content-Type': 'application/json', ...opts?.headers },
       ...opts,
@@ -35,7 +42,7 @@ export const api = {
     }>('/v1/info'),
 
   authRegisterOptions: (input: { displayName?: string; email?: string }) =>
-    apiFetch('/v1/auth/register/options', {
+    apiFetch<RegistrationOptionsJSON>('/v1/auth/register/options', {
       method: 'POST',
       body: JSON.stringify(input),
     }),
@@ -45,7 +52,7 @@ export const api = {
       body: JSON.stringify(input),
     }),
   authLoginOptions: (input: { email?: string; userId?: string }) =>
-    apiFetch('/v1/auth/login/options', {
+    apiFetch<AuthenticationOptionsJSON>('/v1/auth/login/options', {
       method: 'POST',
       body: JSON.stringify(input),
     }),
@@ -78,4 +85,3 @@ export const api = {
     }),
   listWalletEvents: (walletId: string) => apiFetch(`/v1/wallet/${walletId}/events`),
 };
-

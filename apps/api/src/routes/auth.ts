@@ -1,6 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import {
+  type AuthenticationResponseJSON,
+  type AuthenticatorTransportFuture,
+  type RegistrationResponseJSON,
   generateAuthenticationOptions,
   generateRegistrationOptions,
   verifyAuthenticationResponse,
@@ -23,9 +26,30 @@ function normalizeEmail(email?: string): string | undefined {
   return email.trim().toLowerCase();
 }
 
+function normalizeTransports(
+  transports: string[] | null
+): AuthenticatorTransportFuture[] | undefined {
+  if (!transports || transports.length === 0) {
+    return undefined;
+  }
+  const allowed: AuthenticatorTransportFuture[] = ['ble', 'hybrid', 'internal', 'nfc', 'usb'];
+  const filtered = transports.filter((value): value is AuthenticatorTransportFuture =>
+    allowed.includes(value as AuthenticatorTransportFuture)
+  );
+  return filtered.length > 0 ? filtered : undefined;
+}
+
 export async function authRoute(app: FastifyInstance) {
   app.post<{ Body: { displayName?: string; email?: string } }>(
     '/auth/register/options',
+    {
+      config: {
+        rateLimit: {
+          max: 20,
+          timeWindow: '1 minute',
+        },
+      },
+    },
     async (req, reply) => {
       if (!app.db) {
         return reply.code(500).send({ ok: false, error: 'Database is required' });
@@ -73,11 +97,21 @@ export async function authRoute(app: FastifyInstance) {
       response: {
         id: string;
         response: { clientDataJSON: string };
-      } & Record<string, unknown>;
+      } & RegistrationResponseJSON;
       displayName?: string;
       email?: string;
     };
-  }>('/auth/register/verify', async (req, reply) => {
+  }>(
+    '/auth/register/verify',
+    {
+      config: {
+        rateLimit: {
+          max: 20,
+          timeWindow: '1 minute',
+        },
+      },
+    },
+    async (req, reply) => {
     if (!app.db) {
       return reply.code(500).send({ ok: false, error: 'Database is required' });
     }
@@ -89,7 +123,7 @@ export async function authRoute(app: FastifyInstance) {
     }
 
     const verification = await verifyRegistrationResponse({
-      response: req.body.response as never,
+      response: req.body.response,
       expectedChallenge: challenge,
       expectedOrigin: app.env.WEBAUTHN_ORIGIN,
       expectedRPID: app.env.WEBAUTHN_RP_ID,
@@ -156,52 +190,74 @@ export async function authRoute(app: FastifyInstance) {
 
     const session = await app.createSession(user.id);
     app.setSessionCookie(reply, session.token, session.expiresAt);
-    return { ok: true, data: { user } };
-  });
-
-  app.post<{ Body: { email?: string; userId?: string } }>('/auth/login/options', async (req, reply) => {
-    if (!app.db) {
-      return reply.code(500).send({ ok: false, error: 'Database is required' });
+      return { ok: true, data: { user } };
     }
+  );
 
-    const email = normalizeEmail(req.body.email);
-    let userId = req.body.userId;
-    if (!userId && email) {
-      const user = (await app.db.select().from(users).where(eq(users.email, email)).limit(1))[0];
-      userId = user?.id;
+  app.post<{ Body: { email?: string; userId?: string } }>(
+    '/auth/login/options',
+    {
+      config: {
+        rateLimit: {
+          max: 30,
+          timeWindow: '1 minute',
+        },
+      },
+    },
+    async (req, reply) => {
+      if (!app.db) {
+        return reply.code(500).send({ ok: false, error: 'Database is required' });
+      }
+
+      const email = normalizeEmail(req.body.email);
+      let userId = req.body.userId;
+      if (!userId && email) {
+        const user = (await app.db.select().from(users).where(eq(users.email, email)).limit(1))[0];
+        userId = user?.id;
+      }
+
+      const allowCredentials =
+        userId === undefined
+          ? undefined
+          : (
+              await app.db
+                .select()
+                .from(passkeyCredentials)
+                .where(eq(passkeyCredentials.userId, userId))
+            ).map((row) => ({
+              id: row.credentialId,
+                transports: normalizeTransports(row.transports),
+            }));
+
+      const options = await generateAuthenticationOptions({
+        rpID: app.env.WEBAUTHN_RP_ID,
+        userVerification: 'preferred',
+        allowCredentials,
+      });
+
+      await app.storeChallenge('login', options.challenge, { userId: userId ?? null });
+      return { ok: true, data: options };
     }
-
-    const allowCredentials =
-      userId === undefined
-        ? undefined
-        : (
-            await app.db
-              .select()
-              .from(passkeyCredentials)
-              .where(eq(passkeyCredentials.userId, userId))
-          ).map((row) => ({
-            id: row.credentialId,
-            transports: row.transports as never,
-          }));
-
-    const options = await generateAuthenticationOptions({
-      rpID: app.env.WEBAUTHN_RP_ID,
-      userVerification: 'preferred',
-      allowCredentials,
-    });
-
-    await app.storeChallenge('login', options.challenge, { userId: userId ?? null });
-    return { ok: true, data: options };
-  });
+  );
 
   app.post<{
     Body: {
       response: Record<string, unknown> & {
         id: string;
         response: { clientDataJSON: string };
-      } & Record<string, unknown>;
+      } & AuthenticationResponseJSON;
     };
-  }>('/auth/login/verify', async (req, reply) => {
+  }>(
+    '/auth/login/verify',
+    {
+      config: {
+        rateLimit: {
+          max: 30,
+          timeWindow: '1 minute',
+        },
+      },
+    },
+    async (req, reply) => {
     if (!app.db) {
       return reply.code(500).send({ ok: false, error: 'Database is required' });
     }
@@ -228,7 +284,7 @@ export async function authRoute(app: FastifyInstance) {
     }
 
     const verification = await verifyAuthenticationResponse({
-      response: req.body.response as never,
+      response: req.body.response,
       expectedChallenge: challenge,
       expectedOrigin: app.env.WEBAUTHN_ORIGIN,
       expectedRPID: app.env.WEBAUTHN_RP_ID,
@@ -237,7 +293,7 @@ export async function authRoute(app: FastifyInstance) {
         id: credential.credentialId,
         publicKey: isoBase64URL.toBuffer(credential.publicKey),
         counter: credential.counter,
-        transports: credential.transports as never,
+        transports: normalizeTransports(credential.transports),
       },
     });
 
@@ -260,10 +316,11 @@ export async function authRoute(app: FastifyInstance) {
       return reply.code(404).send({ ok: false, error: 'User not found' });
     }
 
-    const session = await app.createSession(user.id);
-    app.setSessionCookie(reply, session.token, session.expiresAt);
-    return { ok: true, data: { user } };
-  });
+      const session = await app.createSession(user.id);
+      app.setSessionCookie(reply, session.token, session.expiresAt);
+      return { ok: true, data: { user } };
+    }
+  );
 
   app.post('/auth/logout', async (req, reply) => {
     const token = req.cookies[app.env.AUTH_COOKIE_NAME];

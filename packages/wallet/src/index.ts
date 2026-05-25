@@ -45,6 +45,10 @@ export interface WalletRecord {
   createdAt: Date;
 }
 
+interface SigningPolicyRules {
+  denySignMessage?: boolean;
+}
+
 export class DbWalletService {
   constructor(
     private readonly db: Db,
@@ -212,9 +216,10 @@ export class DbWalletService {
       .limit(1);
     const policy = rows[0];
     if (!policy) {
-      return { allowed: true, reason: 'default allow', policyName: null as string | null };
+      return { allowed: true, reason: 'default allow', policyName: null };
     }
-    const blocked = Boolean((policy.rules['denySignMessage'] as boolean | undefined) === true);
+    const rules = policy.rules as SigningPolicyRules;
+    const blocked = rules.denySignMessage === true;
     if (blocked) {
       return { allowed: false, reason: 'denySignMessage rule', policyName: policy.name };
     }

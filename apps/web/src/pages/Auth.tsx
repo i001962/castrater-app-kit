@@ -17,7 +17,7 @@ export default function Auth() {
       setOutput(JSON.stringify(options, null, 2));
       return;
     }
-    const response = await startRegistration({ optionsJSON: options.data as never });
+    const response = await startRegistration({ optionsJSON: options.data });
     const verified = await api.authRegisterVerify({
       response,
       displayName: displayName || undefined,
@@ -34,7 +34,7 @@ export default function Auth() {
       setOutput(JSON.stringify(options, null, 2));
       return;
     }
-    const response = await startAuthentication({ optionsJSON: options.data as never });
+    const response = await startAuthentication({ optionsJSON: options.data });
     const verified = await api.authLoginVerify({ response });
     setOutput(JSON.stringify(verified, null, 2));
   };
@@ -107,4 +107,3 @@ export default function Auth() {
     </div>
   );
 }
-

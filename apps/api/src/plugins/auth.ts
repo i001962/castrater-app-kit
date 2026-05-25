@@ -84,6 +84,7 @@ export const authPlugin = fp(async (app) => {
         await app.redis.set(key, value, 'EX', ttlSeconds);
         return;
       } catch {
+        app.log.warn('Redis unavailable for challenge storage; using in-memory fallback (single-instance only)');
         fallbackChallenges.set(key, { payload, expiresAt: Date.now() + ttlSeconds * 1000 });
       }
     }
@@ -136,4 +137,3 @@ export const authPlugin = fp(async (app) => {
     request.authSessionId = session.id;
   });
 });
-
