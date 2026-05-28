@@ -32,8 +32,14 @@ services:
       - HOST=0.0.0.0
       - REDIS_URL=redis://redis:6379
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:changeme@postgres:5432/castrater}
-      - QKMS_URL=${QKMS_URL:-}
-      - QKMS_API_KEY=${QKMS_API_KEY:-}
+      - AUTH_PROVIDER=${AUTH_PROVIDER:-passkey}
+      - SESSION_PROVIDER=${SESSION_PROVIDER:-cookie}
+      - CUSTODY_PROVIDER=${CUSTODY_PROVIDER:-local}
+      - LOCAL_CUSTODY_SECRET=${LOCAL_CUSTODY_SECRET:-change-me-local-custody-secret}
+      - QUILIBRIUM_QKMS_SERVER=${QUILIBRIUM_QKMS_SERVER:-https://qkms.quilibrium.com}
+      - QUILIBRIUM_QNZM_SERVER=${QUILIBRIUM_QNZM_SERVER:-https://qnzm.quilibrium.com}
+      - QUILIBRIUM_APP_ID=${QUILIBRIUM_APP_ID:-}
+      - QUILIBRIUM_APP_SECRET=${QUILIBRIUM_APP_SECRET:-}
       - STORAGE_BASE_DIR=/app/storage
       - LOG_LEVEL=${LOG_LEVEL:-info}
       - CORS_ORIGIN=${CORS_ORIGIN:-http://localhost:4000}

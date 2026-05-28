@@ -18,7 +18,7 @@ export default function StatusPage() {
           {JSON.stringify(health, null, 2)}
         </pre>
       </Panel>
-      <Panel title="MVP Status" subtitle="Database, Redis challenge storage, qKMS mode, and WebAuthn config.">
+      <Panel title="MVP Status" subtitle="Database, Redis challenge storage, scaffold selections, custody mode, and WebAuthn config.">
         <pre className="overflow-auto rounded-2xl border border-terminal-border bg-black/30 p-4 text-xs text-terminal-green">
           {JSON.stringify(status, null, 2)}
         </pre>

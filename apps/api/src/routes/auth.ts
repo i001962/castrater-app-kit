@@ -8,12 +8,24 @@ export async function authRoute(app: FastifyInstance) {
   app.post<{ Body: { displayName?: string; email?: string } }>(
     '/auth/register/options',
     async (request) => {
+      if (app.env.AUTH_PROVIDER !== 'passkey') {
+        return {
+          ok: false,
+          error: `Auth provider ${app.env.AUTH_PROVIDER} does not support passkey registration`,
+        };
+      }
       const options = await app.auth.createRegistrationOptions(request.body ?? {});
       return { ok: true, data: options };
     }
   );
 
   app.post('/auth/register/verify', async (request, reply) => {
+    if (app.env.AUTH_PROVIDER !== 'passkey') {
+      return reply.code(400).send({
+        ok: false,
+        error: `Auth provider ${app.env.AUTH_PROVIDER} does not support passkey registration`,
+      });
+    }
     try {
       const user = await app.auth.verifyRegistration(
         request.body as RegistrationVerifyBody,
@@ -31,12 +43,24 @@ export async function authRoute(app: FastifyInstance) {
   app.post<{ Body: { email?: string; userId?: string } }>(
     '/auth/login/options',
     async (request) => {
+      if (app.env.AUTH_PROVIDER !== 'passkey') {
+        return {
+          ok: false,
+          error: `Auth provider ${app.env.AUTH_PROVIDER} does not support passkey login`,
+        };
+      }
       const options = await app.auth.createAuthenticationOptions(request.body ?? {});
       return { ok: true, data: options };
     }
   );
 
   app.post('/auth/login/verify', async (request, reply) => {
+    if (app.env.AUTH_PROVIDER !== 'passkey') {
+      return reply.code(400).send({
+        ok: false,
+        error: `Auth provider ${app.env.AUTH_PROVIDER} does not support passkey login`,
+      });
+    }
     try {
       const user = await app.auth.verifyAuthentication(
         request.body as AuthenticationVerifyBody,

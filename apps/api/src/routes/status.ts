@@ -16,15 +16,34 @@ export async function statusRoute(app: FastifyInstance) {
           .catch(() => 'unreachable')
       : 'memory-fallback';
 
-    const qkms = getQkmsStatus();
+    const custody =
+      app.env.CUSTODY_PROVIDER === 'local'
+        ? {
+            mode: 'local',
+            configured: Boolean(app.env.LOCAL_CUSTODY_SECRET),
+          }
+        : getQkmsStatus({
+            mode: app.env.CUSTODY_PROVIDER === 'quilibrium-sdk' ? 'quilibrium-sdk' : 'mock',
+            quilSdk: {
+              qkmsServer: app.env.QUILIBRIUM_QKMS_SERVER,
+              qnzmServer: app.env.QUILIBRIUM_QNZM_SERVER,
+              appId: app.env.QUILIBRIUM_APP_ID,
+              appSecret: app.env.QUILIBRIUM_APP_SECRET,
+            },
+          });
 
     return {
       ok: true,
       data: {
-        authEnabled: true,
+        authEnabled: app.env.AUTH_PROVIDER === 'passkey',
         db: dbStatus,
         redis: redisStatus,
-        qkms,
+        custody,
+        scaffold: {
+          authProvider: app.env.AUTH_PROVIDER,
+          sessionProvider: app.env.SESSION_PROVIDER,
+          custodyProvider: app.env.CUSTODY_PROVIDER,
+        },
         webauthn: {
           rpId: app.env.WEBAUTHN_RP_ID,
           origin: app.env.WEBAUTHN_ORIGIN,

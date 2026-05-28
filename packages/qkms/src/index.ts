@@ -14,9 +14,10 @@ export interface QkmsClient {
 }
 
 export interface QkmsStatus {
-  mode: 'mock' | 'remote';
+  mode: 'mock' | 'quilibrium-sdk';
   configured: boolean;
-  baseUrl?: string;
+  server?: string;
+  qnzmServer?: string;
 }
 
 function digestHex(value: string | Uint8Array): string {
@@ -76,94 +77,160 @@ export class MockQkmsClient implements QkmsClient {
   }
 }
 
-export class RemoteQkmsClient implements QkmsClient {
-  constructor(
-    private readonly baseUrl: string,
-    private readonly apiKey: string
-  ) {}
+export interface QuilibriumSdkConfig {
+  qkmsServer: string;
+  qnzmServer: string;
+  appId: string;
+  appSecret: string;
+}
 
-  private async request<T>(path: string, init?: RequestInit): Promise<T> {
-    const response = await fetch(`${this.baseUrl}${path}`, {
-      ...init,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Api-Key': this.apiKey,
-        ...init?.headers,
-      },
-    });
+type QuilibriumNodeSdkClient = {
+  wallets: () => {
+    create: (input: { chain_type: string }) => Promise<{
+      id?: string;
+      keyId?: string;
+      key_id?: string;
+      address?: string;
+    }>;
+    ethereum?: () => {
+      signMessage?: (
+        walletId: string,
+        input: { message: string }
+      ) => Promise<{ signature?: string }>;
+    };
+  };
+};
 
-    if (!response.ok) {
-      throw new Error(`qKMS request failed: ${response.status} ${path}`);
+async function importQuilibriumNodeSdk() {
+  const dynamicImport = new Function('specifier', 'return import(specifier)') as (
+    specifier: string
+  ) => Promise<{ QkmsClient?: new (config: unknown) => QuilibriumNodeSdkClient }>;
+
+  try {
+    return await dynamicImport('@quilibrium/qkms-sdk-node');
+  } catch {
+    throw new Error(
+      'quilibrium-sdk custody requires @quilibrium/qkms-sdk-node to be installed and resolvable'
+    );
+  }
+}
+
+export class QuilibriumSdkQkmsClient implements QkmsClient {
+  private client: QuilibriumNodeSdkClient | null = null;
+
+  constructor(private readonly config: QuilibriumSdkConfig) {}
+
+  private async getClient() {
+    if (this.client) {
+      return this.client;
     }
 
-    return (await response.json()) as T;
-  }
+    const mod = await importQuilibriumNodeSdk();
+    if (!mod.QkmsClient) {
+      throw new Error('@quilibrium/qkms-sdk-node did not export QkmsClient');
+    }
 
-  createKey(input: CreateKeyInput): Promise<{ keyId: string; address: string }> {
-    return this.request('/v1/keys', {
-      method: 'POST',
-      body: JSON.stringify(input),
+    this.client = new mod.QkmsClient({
+      appId: this.config.appId,
+      appSecret: this.config.appSecret,
+      server: this.config.qkmsServer,
+      qnzmServer: this.config.qnzmServer,
     });
+    return this.client;
   }
 
-  getAddress(keyId: string): Promise<{ address: string }> {
-    return this.request(`/v1/keys/${keyId}/address`);
-  }
-
-  signMessage(keyId: string, payload: string | Uint8Array): Promise<{ signature: string }> {
-    return this.request(`/v1/keys/${keyId}/sign`, {
-      method: 'POST',
-      body: JSON.stringify({
-        payload:
-          typeof payload === 'string'
-            ? payload
-            : Buffer.from(payload).toString('base64'),
-      }),
+  async createKey(input: CreateKeyInput): Promise<{ keyId: string; address: string }> {
+    const client = await this.getClient();
+    const wallet = await client.wallets().create({
+      chain_type: input.curve === 'ed25519' ? 'solana' : 'ethereum',
     });
+    const keyId = wallet.keyId ?? wallet.key_id ?? wallet.id;
+
+    if (!keyId || !wallet.address) {
+      throw new Error('Quilibrium SDK create wallet response is missing key id or address');
+    }
+
+    return {
+      keyId,
+      address: wallet.address,
+    };
   }
 
-  signTransaction(keyId: string, tx: unknown): Promise<{ signature: string }> {
-    return this.request(`/v1/keys/${keyId}/sign-transaction`, {
-      method: 'POST',
-      body: JSON.stringify({ tx }),
+  async getAddress(_keyId: string): Promise<{ address: string }> {
+    throw new Error(
+      'Quilibrium SDK address lookup is not wired yet; store address from createKey response'
+    );
+  }
+
+  async signMessage(
+    keyId: string,
+    payload: string | Uint8Array
+  ): Promise<{ signature: string }> {
+    const client = await this.getClient();
+    const ethereum = client.wallets().ethereum?.();
+    if (!ethereum?.signMessage) {
+      throw new Error('Quilibrium SDK ethereum signMessage API is unavailable');
+    }
+
+    const response = await ethereum.signMessage(keyId, {
+      message:
+        typeof payload === 'string' ? payload : Buffer.from(payload).toString('base64'),
     });
+
+    if (!response.signature) {
+      throw new Error('Quilibrium SDK signMessage response is missing signature');
+    }
+
+    return { signature: response.signature };
   }
 
-  disableKey(keyId: string): Promise<{ disabled: true }> {
-    return this.request(`/v1/keys/${keyId}`, { method: 'DELETE' });
+  async signTransaction(_keyId: string, _tx: unknown): Promise<{ signature: string }> {
+    throw new Error('Quilibrium SDK transaction signing is deferred until wallet RPC support lands');
+  }
+
+  async disableKey(_keyId: string): Promise<{ disabled: true }> {
+    throw new Error('Quilibrium SDK key disable is not wired yet');
   }
 }
 
 export function createQkmsClient(opts?: {
-  baseUrl?: string;
-  apiKey?: string;
-  mode?: 'mock' | 'remote';
+  quilSdk?: Partial<QuilibriumSdkConfig>;
+  mode?: 'mock' | 'quilibrium-sdk';
 }): QkmsClient {
-  const mode = opts?.mode ?? (process.env['QKMS_URL'] ? 'remote' : 'mock');
-  if (mode === 'remote') {
-    const baseUrl = opts?.baseUrl ?? process.env['QKMS_URL'];
-    const apiKey = opts?.apiKey ?? process.env['QKMS_API_KEY'];
-    if (!baseUrl || !apiKey) {
-      throw new Error('QKMS_URL and QKMS_API_KEY are required for remote qKMS mode');
+  const mode = opts?.mode ?? (process.env['QUILIBRIUM_QKMS_SERVER'] ? 'quilibrium-sdk' : 'mock');
+  if (mode === 'quilibrium-sdk') {
+    const qkmsServer = opts?.quilSdk?.qkmsServer ?? process.env['QUILIBRIUM_QKMS_SERVER'];
+    const qnzmServer = opts?.quilSdk?.qnzmServer ?? process.env['QUILIBRIUM_QNZM_SERVER'];
+    const appId = opts?.quilSdk?.appId ?? process.env['QUILIBRIUM_APP_ID'];
+    const appSecret = opts?.quilSdk?.appSecret ?? process.env['QUILIBRIUM_APP_SECRET'];
+    if (!qkmsServer || !qnzmServer || !appId || !appSecret) {
+      throw new Error(
+        'QUILIBRIUM_QKMS_SERVER, QUILIBRIUM_QNZM_SERVER, QUILIBRIUM_APP_ID, and QUILIBRIUM_APP_SECRET are required for quilibrium-sdk custody'
+      );
     }
-    return new RemoteQkmsClient(baseUrl, apiKey);
+    return new QuilibriumSdkQkmsClient({ qkmsServer, qnzmServer, appId, appSecret });
   }
   return new MockQkmsClient();
 }
 
 export function getQkmsStatus(opts?: {
-  baseUrl?: string;
-  apiKey?: string;
-  mode?: 'mock' | 'remote';
+  quilSdk?: Partial<QuilibriumSdkConfig>;
+  mode?: 'mock' | 'quilibrium-sdk';
 }): QkmsStatus {
-  const mode = opts?.mode ?? (process.env['QKMS_URL'] ? 'remote' : 'mock');
-  if (mode === 'remote') {
-    const baseUrl = opts?.baseUrl ?? process.env['QKMS_URL'] ?? undefined;
-    const apiKey = opts?.apiKey ?? process.env['QKMS_API_KEY'] ?? undefined;
+  const mode = opts?.mode ?? (process.env['QUILIBRIUM_QKMS_SERVER'] ? 'quilibrium-sdk' : 'mock');
+  if (mode === 'quilibrium-sdk') {
+    const server =
+      opts?.quilSdk?.qkmsServer ?? process.env['QUILIBRIUM_QKMS_SERVER'] ?? undefined;
+    const qnzmServer =
+      opts?.quilSdk?.qnzmServer ?? process.env['QUILIBRIUM_QNZM_SERVER'] ?? undefined;
+    const appId = opts?.quilSdk?.appId ?? process.env['QUILIBRIUM_APP_ID'] ?? undefined;
+    const appSecret =
+      opts?.quilSdk?.appSecret ?? process.env['QUILIBRIUM_APP_SECRET'] ?? undefined;
     return {
       mode,
-      configured: Boolean(baseUrl && apiKey),
-      baseUrl,
+      configured: Boolean(server && qnzmServer && appId && appSecret),
+      server,
+      qnzmServer,
     };
   }
 

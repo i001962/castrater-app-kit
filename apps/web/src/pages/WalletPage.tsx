@@ -3,6 +3,7 @@ import Panel from '../components/Panel.tsx';
 import {
   api,
   type SignMessageResult,
+  type StatusResponse,
   type WalletEventRecord,
   type WalletRecord,
 } from '../lib/api.ts';
@@ -15,6 +16,7 @@ export default function WalletPage() {
   const [events, setEvents] = useState<WalletEventRecord[]>([]);
   const [status, setStatus] = useState('Load your session on the auth page, then create a wallet.');
   const [isLoading, setIsLoading] = useState(true);
+  const [runtimeStatus, setRuntimeStatus] = useState<StatusResponse | null>(null);
 
   const selectedWallet = wallets.find((wallet) => wallet.walletId === selectedWalletId) ?? null;
 
@@ -35,6 +37,11 @@ export default function WalletPage() {
 
   useEffect(() => {
     refreshWallets().catch(() => setStatus('Failed to load wallets'));
+    api.status().then((response) => {
+      if (response.ok && response.data) {
+        setRuntimeStatus(response.data);
+      }
+    });
   }, []);
 
   async function handleCreateWallet() {
@@ -57,7 +64,9 @@ export default function WalletPage() {
     const response = await api.signMessage(selectedWalletId, message);
     if (response.ok && response.data) {
       setSignature(response.data);
-      setStatus('Message signed through qKMS boundary');
+      setStatus(
+        `Message signed through the ${runtimeStatus?.scaffold.custodyProvider ?? 'configured'} custody boundary`
+      );
       const eventResponse = await api.getWalletEvents(selectedWalletId);
       if (eventResponse.ok && eventResponse.data) {
         setEvents(eventResponse.data);
@@ -86,9 +95,16 @@ export default function WalletPage() {
           title="Wallet Actions"
           subtitle="Create an app-scoped wallet, then sign a test message through the API."
         >
-          <div className="mb-4 rounded-2xl border border-terminal-amber/50 bg-terminal-amber/10 px-4 py-3 text-sm text-terminal-amber">
-            This scaffold is still using the mock qKMS signer unless you configure a real remote qKMS provider.
-          </div>
+          {runtimeStatus ? (
+            <div className="mb-4 rounded-2xl border border-terminal-amber/50 bg-terminal-amber/10 px-4 py-3 text-sm text-terminal-amber">
+              Custody provider: <strong>{runtimeStatus.scaffold.custodyProvider}</strong>.{' '}
+              {runtimeStatus.scaffold.custodyProvider === 'local'
+                ? 'Keys are real and durable, but local custody is still unsuitable for production.'
+                : runtimeStatus.scaffold.custodyProvider === 'mock'
+                  ? 'This mode is for development only and does not provide real custody.'
+                  : 'Signing is delegated to the Quilibrium qKMS SDK provider.'}
+            </div>
+          ) : null}
           <div className="flex flex-wrap gap-3">
             <button className="button-primary" onClick={handleCreateWallet}>
               create wallet
@@ -113,7 +129,7 @@ export default function WalletPage() {
           </p>
         </Panel>
 
-        <Panel title="Signature Result" subtitle="The browser never signs directly. The API applies policy checks, calls qKMS, and records an event.">
+        <Panel title="Signature Result" subtitle="The browser never signs directly. The API applies policy checks, calls the selected custody provider, and records an event.">
           {signature ? (
             <div className="grid gap-3 rounded-2xl border border-terminal-border bg-black/30 p-4 text-sm">
               <div className="flex justify-between gap-4">

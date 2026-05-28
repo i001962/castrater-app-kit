@@ -85,6 +85,10 @@ async function persistSession(
   reply: FastifyReply,
   userId: string
 ) {
+  if (env.SESSION_PROVIDER === 'none') {
+    return;
+  }
+
   const token = createSessionToken();
   const tokenHash = hashSessionToken(token);
   const expiresAt = new Date(Date.now() + env.SESSION_TTL_HOURS * 60 * 60 * 1000);
@@ -279,6 +283,10 @@ export class AuthService {
   }
 
   async getUserFromSessionToken(token?: string | null) {
+    if (this.env.SESSION_PROVIDER === 'none') {
+      return null;
+    }
+
     if (!token) {
       return null;
     }
@@ -312,6 +320,16 @@ export class AuthService {
   }
 
   async logout(token: string | undefined, reply: FastifyReply) {
+    if (this.env.SESSION_PROVIDER === 'none') {
+      reply.clearCookie(this.env.SESSION_COOKIE_NAME, {
+        path: '/',
+        httpOnly: true,
+        sameSite: 'lax',
+        secure: !this.env.AUTH_INSECURE_COOKIE,
+      });
+      return;
+    }
+
     if (token) {
       await this.db.delete(sessions).where(eq(sessions.tokenHash, hashSessionToken(token)));
     }
@@ -325,7 +343,33 @@ export class AuthService {
   }
 
   async cleanupExpiredSessions() {
+    if (this.env.SESSION_PROVIDER === 'none') {
+      return;
+    }
     await this.db.delete(sessions).where(sql`${sessions.expiresAt} <= now()`);
+  }
+
+  async ensureDemoUser() {
+    const email = this.env.DEMO_USER_EMAIL.trim().toLowerCase();
+    const displayName = this.env.DEMO_USER_DISPLAY_NAME.trim();
+
+    const existing = await this.db.query.users.findFirst({
+      where: eq(users.email, email),
+    });
+    if (existing) {
+      return existing;
+    }
+
+    const [user] = await this.db
+      .insert(users)
+      .values({
+        id: crypto.randomUUID(),
+        email,
+        displayName,
+      })
+      .returning();
+
+    return user;
   }
 
   private async lookupAllowCredentials(userId: string) {

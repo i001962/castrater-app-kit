@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { startAuthentication, startRegistration } from '@simplewebauthn/browser';
 import Panel from '../components/Panel.tsx';
-import { api, type SessionUser } from '../lib/api.ts';
+import { api, type SessionUser, type StatusResponse } from '../lib/api.ts';
 
 export default function AuthPage() {
   const [displayName, setDisplayName] = useState('Demo User');
@@ -9,17 +9,27 @@ export default function AuthPage() {
   const [user, setUser] = useState<SessionUser | null>(null);
   const [message, setMessage] = useState<string>('Checking current session…');
   const [isLoading, setIsLoading] = useState(true);
+  const [status, setStatus] = useState<StatusResponse | null>(null);
 
   useEffect(() => {
-    api
-      .me()
-      .then((response) => {
-        if (response.ok && response.data) {
-          setUser(response.data);
-          setMessage('Authenticated');
+    Promise.all([api.status(), api.me()])
+      .then(([statusResponse, sessionResponse]) => {
+        setStatus(statusResponse.ok && statusResponse.data ? statusResponse.data : null);
+
+        if (sessionResponse.ok && sessionResponse.data) {
+          setUser(sessionResponse.data);
+          setMessage(
+            statusResponse.data?.scaffold.authProvider === 'demo'
+              ? 'Demo auth is active'
+              : 'Authenticated'
+          );
         } else {
           setUser(null);
-          setMessage('No active session');
+          setMessage(
+            statusResponse.data?.scaffold.authProvider === 'demo'
+              ? 'Demo auth is unavailable'
+              : 'No active session'
+          );
         }
       })
       .catch(() => {
@@ -86,44 +96,65 @@ export default function AuthPage() {
   return (
     <div className="grid gap-6 md:grid-cols-[1.2fr_0.8fr]">
       <Panel
-        title="Passkey Auth"
-        subtitle="Register a passkey on localhost, then log back in using the WebAuthn flow."
+        title={status?.scaffold.authProvider === 'demo' ? 'Demo Auth' : 'Passkey Auth'}
+        subtitle={
+          status?.scaffold.authProvider === 'demo'
+            ? 'This generated scaffold auto-authenticates a durable demo user and skips browser passkeys.'
+            : 'Register a passkey on localhost, then log back in using the WebAuthn flow.'
+        }
       >
-        <div className="grid gap-4">
-          <label className="grid gap-2 text-sm">
-            <span className="text-terminal-dim">Display name</span>
-            <input
-              className="input"
-              value={displayName}
-              onChange={(event) => setDisplayName(event.target.value)}
-            />
-          </label>
-          <label className="grid gap-2 text-sm">
-            <span className="text-terminal-dim">Email</span>
-            <input
-              className="input"
-              value={email}
-              onChange={(event) => setEmail(event.target.value)}
-              type="email"
-            />
-          </label>
-          <div className="flex flex-wrap gap-3">
-            <button className="button-primary" onClick={handleRegister}>
-              register passkey
-            </button>
-            <button className="button-secondary" onClick={handleLogin}>
-              login with passkey
-            </button>
+        {status?.scaffold.authProvider === 'demo' ? (
+          <div className="grid gap-4 text-sm text-terminal-muted">
+            <p className="rounded-2xl border border-terminal-border bg-black/20 px-4 py-3">
+              Requests are authenticated as a seeded demo user. This is useful for generated
+              projects that want to focus on wallet and signer flows before choosing a human auth
+              strategy.
+            </p>
             <button className="button-secondary" onClick={handleLogout}>
-              logout
+              clear session state
             </button>
           </div>
-        </div>
+        ) : (
+          <div className="grid gap-4">
+            <label className="grid gap-2 text-sm">
+              <span className="text-terminal-dim">Display name</span>
+              <input
+                className="input"
+                value={displayName}
+                onChange={(event) => setDisplayName(event.target.value)}
+              />
+            </label>
+            <label className="grid gap-2 text-sm">
+              <span className="text-terminal-dim">Email</span>
+              <input
+                className="input"
+                value={email}
+                onChange={(event) => setEmail(event.target.value)}
+                type="email"
+              />
+            </label>
+            <div className="flex flex-wrap gap-3">
+              <button className="button-primary" onClick={handleRegister}>
+                register passkey
+              </button>
+              <button className="button-secondary" onClick={handleLogin}>
+                login with passkey
+              </button>
+              <button className="button-secondary" onClick={handleLogout}>
+                logout
+              </button>
+            </div>
+          </div>
+        )}
       </Panel>
 
       <Panel
         title="Current Session"
-        subtitle="The API issues an httpOnly session cookie after registration or login."
+        subtitle={
+          status?.scaffold.sessionProvider === 'none'
+            ? 'This variant does not issue browser sessions.'
+            : 'The API issues an httpOnly session cookie after registration or login.'
+        }
       >
         <p className="rounded-2xl border border-terminal-border bg-black/20 px-4 py-3 text-sm text-terminal-muted">
           {message}

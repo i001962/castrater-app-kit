@@ -28,15 +28,30 @@ function createStubDb(): Db {
       appAccounts: {
         findFirst: async () => null,
       },
+      custodyKeys: {
+        findFirst: async () => null,
+      },
       signingPolicies: {
         findFirst: async () => null,
       },
     },
     insert: () => ({
       values: () => ({
-        returning: async () => [],
+        returning: async () => [
+          {
+            id: 'demo-user',
+            displayName: 'Demo User',
+            email: 'demo@example.com',
+          },
+        ],
         onConflictDoUpdate: () => ({
-          returning: async () => [],
+          returning: async () => [
+            {
+              id: 'demo-user',
+              displayName: 'Demo User',
+              email: 'demo@example.com',
+            },
+          ],
         }),
       }),
     }),
@@ -107,11 +122,30 @@ test('/v1/status reports qkms status', async () => {
     env: {
       NODE_ENV: 'test',
       AUTH_INSECURE_COOKIE: true,
+      CUSTODY_PROVIDER: 'mock',
     },
   });
 
   const response = await app.inject({ method: 'GET', url: '/v1/status' });
   assert.equal(response.statusCode, 200);
-  assert.equal(response.json().data.qkms.mode, 'mock');
+  assert.equal(response.json().data.custody.mode, 'mock');
+  await app.close();
+});
+
+test('demo auth mode resolves a durable current user without session cookies', async () => {
+  const app = await buildApp({
+    db: createStubDb(),
+    redis: null,
+    env: {
+      NODE_ENV: 'test',
+      AUTH_PROVIDER: 'demo',
+      SESSION_PROVIDER: 'none',
+      AUTH_INSECURE_COOKIE: true,
+    },
+  });
+
+  const response = await app.inject({ method: 'GET', url: '/v1/auth/me' });
+  assert.equal(response.statusCode, 200);
+  assert.equal(response.json().ok, true);
   await app.close();
 });

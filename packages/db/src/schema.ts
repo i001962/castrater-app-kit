@@ -110,6 +110,16 @@ export const appWallets = pgTable('app_wallets', {
   createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
 });
 
+export const custodyKeys = pgTable('custody_keys', {
+  id: uuid('id').primaryKey(),
+  provider: text('provider').notNull(),
+  curve: text('curve').notNull(),
+  encryptedPrivateKey: text('encrypted_private_key').notNull(),
+  publicKey: text('public_key').notNull(),
+  metadata: jsonb('metadata').notNull().default({}),
+  createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+});
+
 export const walletEvents = pgTable('wallet_events', {
   id: uuid('id').primaryKey(),
   walletId: uuid('wallet_id')

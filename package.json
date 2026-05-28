@@ -9,6 +9,7 @@
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
+    "scaffold:new": "pnpm --filter @castrater/create-app scaffold",
     "db:generate": "pnpm --filter @castrater/db db:generate",
     "db:migrate": "pnpm --filter @castrater/db db:migrate",
     "db:studio": "pnpm --filter @castrater/db db:studio",

@@ -6,6 +6,24 @@ export interface ApiResponse<T> {
   error?: string;
 }
 
+export interface StatusResponse {
+  authEnabled: boolean;
+  db: string;
+  redis: string;
+  custody: {
+    mode: 'local' | 'mock' | 'quilibrium-sdk';
+    configured: boolean;
+    server?: string;
+    qnzmServer?: string;
+  };
+  scaffold: {
+    authProvider: 'passkey' | 'demo';
+    sessionProvider: 'cookie' | 'none';
+    custodyProvider: 'local' | 'mock' | 'quilibrium-sdk';
+  };
+  webauthn: { rpId: string; origin: string };
+}
+
 export interface SessionUser {
   id: string;
   displayName: string | null;
@@ -70,17 +88,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<ApiResponse
 export const api = {
   health: () => request<{ status: string; db: string; redis: string }>('/health'),
   status: () =>
-    request<{
-      authEnabled: boolean;
-      db: string;
-      redis: string;
-      qkms: {
-        mode: 'mock' | 'remote';
-        configured: boolean;
-        baseUrl?: string;
-      };
-      webauthn: { rpId: string; origin: string };
-    }>('/v1/status'),
+    request<StatusResponse>('/v1/status'),
   registerOptions: (payload: { displayName?: string; email?: string }) =>
     request('/v1/auth/register/options', {
       method: 'POST',
@@ -108,8 +116,9 @@ export const api = {
       }
     ),
   me: () => request<SessionUser>('/v1/auth/me'),
-  logout: () => request('/v1/auth/logout', { method: 'POST' }),
-  ensureDefaultApp: () => request('/v1/apps/default', { method: 'POST' }),
+  logout: () => request('/v1/auth/logout', { method: 'POST', body: JSON.stringify({}) }),
+  ensureDefaultApp: () =>
+    request('/v1/apps/default', { method: 'POST', body: JSON.stringify({}) }),
   createWallet: (payload?: { appSlug?: string }) =>
     request<{
       wallet: {
